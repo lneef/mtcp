@@ -19,17 +19,12 @@ We require the following libraries to run mTCP.
 - `librt`
 - `libgmp`
 
-Building the `dpdk-iface-kmod` helper requires kernel headers.
-- For Debian/Ubuntu, try ``apt-get install linux-headers-$(uname -r)``
-
 ## Included directories
 
 mtcp: the mTCP stack
 - mtcp/*.c: source code
 - mtcp/include: header files
 - mtcp/lib: built library (libmtcp.a)
-
-dpdk-iface-kmod: helper LKM exporting DPDK net_device stats to the OS
 
 apps: mTCP applications
 - apps/example - example applications (see README)
@@ -42,31 +37,15 @@ config: sample mTCP configuration files (may not be necessary)
 
 ## Install guide
 
-mTCP builds against a system DPDK installation discovered via `pkg-config`.
+mTCP builds against a system DPDK installation discovered via `pkg-config`,
+and drives the NICs purely through DPDK RTE — there is no kernel module.
 
 1. Install DPDK (>= 20.11) so that ``pkg-config --exists libdpdk`` succeeds,
-   set up hugepages, and bind your NIC to a DPDK-compatible driver
-   (e.g. `vfio-pci`) using DPDK's own tooling (`dpdk-hugepages.py`,
-   `dpdk-devbind.py`). See https://doc.dpdk.org for details.
+   set up hugepages, and bind your NIC(s) to a DPDK driver (e.g. `vfio-pci`)
+   with DPDK's own tooling (`dpdk-hugepages.py`, `dpdk-devbind.py`).
+   See https://doc.dpdk.org for details.
 
-2. Build and load the `dpdk-iface-kmod` helper, then register the ports.
-   Intel-based interfaces will show up with a `dpdk` prefix.
-
-    ```bash
-    cd dpdk-iface-kmod
-    make
-    sudo insmod ./dpdk_iface.ko
-    sudo make run
-    cd ..
-    ```
-
-3. Bring the dpdk-registered interface up:
-
-    ```bash
-    sudo ifconfig dpdk0 x.x.x.x netmask 255.255.255.0 up
-    ```
-
-4. Build the mtcp library and example applications:
+2. Build the mtcp library and example applications:
 
     ```bash
     make              # builds libmtcp.a + apps/example (epserver, epwget)
@@ -86,12 +65,18 @@ mTCP builds against a system DPDK installation discovered via `pkg-config`.
     - check header files in `mtcp/include`
     - check example binary files in `apps/example`
 
-5. Check the configurations in `apps/example`
+3. Configure the interfaces in your app's `.conf` (see `apps/example`).
+   Every NIC bound to DPDK is auto-probed; give each one an IP/netmask —
+   `dpdkN` maps to DPDK port `N`:
+
+    ```
+    # port = <name> <ip> <netmask>
+    port = dpdk0 10.0.0.1 255.255.255.0
+    ```
    - `epserver.conf` for server-side configuration
    - `epwget.conf` for client-side configuration
-   - you may write your own configuration file for your application
 
-6. Run the applications!
+4. Run the applications!
 
 
 ## Tested environments

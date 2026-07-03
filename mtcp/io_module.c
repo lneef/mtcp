@@ -8,110 +8,42 @@
 #include <stdio.h>
 /* strcmp func etc. */
 #include <string.h>
-/* for ifreq struct */
-#include <net/if.h>
-/* for ioctl */
-#include <sys/ioctl.h>
-#define RTE_ARGC_MAX		((RTE_MAX_ETHPORTS << 1) + 9)
+/* for isdigit */
+#include <ctype.h>
 /* for dpdk ethernet functions (get mac addresses) */
 #include <rte_ethdev.h>
-#include <dpdk_iface_common.h>
-/* for ceil func */
-#include <math.h>
 /* for TRACE_* */
 #include "debug.h"
-/* for inet_* */
-#include <sys/socket.h>
-#include <netinet/in.h>
+/* for inet_addr */
 #include <arpa/inet.h>
-/* for getopt() */
+/* for getopt()/geteuid() */
 #include <unistd.h>
-/* for getifaddrs */
-#include <sys/types.h>
-#include <ifaddrs.h>
-/* for file opening */
-#include <sys/stat.h>
-#include <fcntl.h>
 /*----------------------------------------------------------------------------*/
 io_module_func *current_iomodule_func = &dpdk_module_func;
-/**
- * DPDK's RTE consumes some huge pages for internal bookkeeping.
- * Therefore, it is not always safe to reserve the exact amount
- * of pages for our stack (e.g. dividing requested mem, in MB, by
- * (1<<20) would be insufficient). Hence, the following value.
- */
-#define RTE_SOCKET_MEM_SHIFT		((1<<19)|(1<<18))
 /*----------------------------------------------------------------------------*/
-#define ALL_STRING			"all"
-#define MAX_PROCLINE_LEN		1024
-#define MAX(a, b) 			((a)>(b)?(a):(b))
-#define MIN(a, b) 			((a)<(b)?(a):(b))
+#define MIN(a, b)			((a)<(b)?(a):(b))
 /*----------------------------------------------------------------------------*/
 /**
- * returns max numa ID while probing for rte devices
+ * DPDK port id encoded in an interface name, e.g. "dpdk0" -> 0.
+ * Returns -1 if the name carries no trailing number.
  */
 static int
-probe_all_rte_devices(char **argv, int *argc, char *dev_name_list)
+get_port_index(const char *name)
 {
-	PciDevice pd;
-	int fd, numa_id = -1;
-	static char end[] = "";
-	static const char delim[] = " \t";
-	static char *dev_tokenizer;
-	char *dev_token, *saveptr;
+	const char *p = name + strlen(name);
 
-	dev_tokenizer = strdup(dev_name_list);
-	if (dev_tokenizer == NULL) {
-		TRACE_ERROR("Can't allocate memory for dev_tokenizer!\n");
-		exit(EXIT_FAILURE);
-	}
-	fd = open(DEV_PATH, O_RDONLY);
-	if (fd != -1) {
-		dev_token = strtok_r(dev_tokenizer, delim, &saveptr);
-		while (dev_token != NULL) {
-			strcpy(pd.ifname, dev_token);
-			if (ioctl(fd, FETCH_PCI_ADDRESS, &pd) == -1) {
-				TRACE_DBG("Could not find pci info on dpdk "
-					  "device: %s. Is it a dpdk-attached "
-					  "interface?\n", dev_token);
-				goto loop_over;
-			}
-			argv[*argc] = strdup("-a");
-			argv[*argc + 1] = calloc(PCI_LENGTH, 1);
-			if (argv[*argc] == NULL ||
-			    argv[*argc + 1] == NULL) {
-				TRACE_ERROR("Memory allocation error!\n");
-				exit(EXIT_FAILURE);
-			}
-			sprintf(argv[*argc + 1], PCI_DOM":"PCI_BUS":"
-				PCI_DEVICE"."PCI_FUNC,
-				pd.pa.domain, pd.pa.bus, pd.pa.device,
-				pd.pa.function);
-			*argc += 2;
-			if (pd.numa_socket > numa_id) numa_id = pd.numa_socket;
-		loop_over:
-			dev_token = strtok_r(NULL, delim, &saveptr);
-		}
-		close(fd);
-		free(dev_tokenizer);
-	} else {
-		TRACE_ERROR("Error opening dpdk-face!\n");
-		exit(EXIT_FAILURE);
-	}
-
-	/* add the terminating "" sequence */
-	argv[*argc] = end;
-
-	return numa_id;
+	while (p > name && isdigit((unsigned char)p[-1]))
+		p--;
+	if (!isdigit((unsigned char)*p))
+		return -1;
+	return atoi(p);
 }
 /*----------------------------------------------------------------------------*/
 int
 SetNetEnv(char *dev_name_list, char *port_stat_list)
 {
-	int eidx = 0;
-	int i, j;
-
-	int set_all_inf = (strncmp(dev_name_list, ALL_STRING, sizeof(ALL_STRING))==0);
+	int i, j, eidx;
+	int ret;
 
 	TRACE_CONFIG("Loading interface setting\n");
 
@@ -122,27 +54,19 @@ SetNetEnv(char *dev_name_list, char *port_stat_list)
 		exit(EXIT_FAILURE);
 	}
 
-	/* DPDK is the only supported packet I/O backend */
+	/* STEP 1: determine the CPU mask for EAL */
 	int cpu = CONFIG.num_cores;
 	mpz_t _cpumask;
 	char cpumaskbuf[32] = "";
 	char mem_channels[8] = "";
-	char socket_mem_str[32] = "";
-	int ret, socket_mem;
-	static struct rte_ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
 
-	/* STEP 1: first determine CPU mask */
 	mpz_init(_cpumask);
-
 	if (!mpz_cmp(_cpumask, CONFIG._cpumask)) {
-		/* get the cpu mask */
 		for (ret = 0; ret < cpu; ret++)
 			mpz_setbit(_cpumask, ret);
-
 		gmp_sprintf(cpumaskbuf, "%ZX", _cpumask);
 	} else
 		gmp_sprintf(cpumaskbuf, "%ZX", CONFIG._cpumask);
-
 	mpz_clear(_cpumask);
 
 	/* STEP 2: determine memory channels per socket */
@@ -153,163 +77,108 @@ SetNetEnv(char *dev_name_list, char *port_stat_list)
 	}
 	sprintf(mem_channels, "%d", CONFIG.num_mem_ch);
 
-	/* STEP 3: determine socket memory (in MB) */
-	socket_mem =
-		RTE_ALIGN_CEIL((unsigned long)ceil((CONFIG.num_cores *
-						    (CONFIG.rcvbuf_size +
-						     CONFIG.sndbuf_size +
-						     sizeof(struct tcp_stream) +
-						     sizeof(struct tcp_recv_vars) +
-						     sizeof(struct tcp_send_vars) +
-						     sizeof(struct fragment_ctx)) *
-						    CONFIG.max_concurrency)/RTE_SOCKET_MEM_SHIFT),
-			       RTE_CACHE_LINE_SIZE);
-
-	/* initialize the rte env */
-	int argc = 6;
-	char *argv[RTE_ARGC_MAX] = {"",
-				    "-c",
-				    cpumaskbuf,
-				    "-n",
-				    mem_channels,
-				    "--proc-type=auto"
-	};
-	ret = probe_all_rte_devices(argv, &argc, dev_name_list);
-
-	/* STEP 4: build up socket mem parameter */
-	sprintf(socket_mem_str, "%d", socket_mem);
+	/* STEP 3: initialise EAL; every NIC bound to DPDK is auto-probed */
+	char *argv[] = {"", "-c", cpumaskbuf, "-n", mem_channels,
+			"--proc-type=auto"};
+	int argc = sizeof(argv) / sizeof(argv[0]);
 
 	/*
-	 * re-set getopt extern variable optind.
-	 * this issue was a bitch to debug
-	 * rte_eal_init() internally uses getopt() syscall
-	 * mtcp applications that also use an `external' getopt
-	 * will cause a violent crash if optind is not reset to zero
-	 * prior to calling the func below...
-	 * see man getopt(3) for more details
+	 * re-set getopt's optind: rte_eal_init() uses getopt() internally,
+	 * and mtcp applications that also parse args would otherwise crash.
+	 * see man getopt(3) for more details.
 	 */
 	optind = 0;
-
-	/* initialize the dpdk eal env */
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0) {
 		TRACE_ERROR("Invalid EAL args!\n");
 		exit(EXIT_FAILURE);
 	}
-	/* give me the count of 'detected' ethernet ports */
+
 	num_devices = rte_eth_dev_count_avail();
 	if (num_devices == 0) {
-		TRACE_ERROR("No Ethernet port!\n");
+		TRACE_ERROR("No DPDK-bound Ethernet port found!\n");
 		exit(EXIT_FAILURE);
 	}
-
-	/* get mac addr entries of 'detected' dpdk ports */
-	for (ret = 0; ret < num_devices; ret++)
-		rte_eth_macaddr_get(ret, &ports_eth_addr[ret]);
-
 	num_queues = MIN(CONFIG.num_cores, MAX_CPUS);
 
-	struct ifaddrs *ifap;
-	struct ifaddrs *iter_if;
-	char *seek;
+	/*
+	 * STEP 4: map the configured interfaces to RTE ports.
+	 * dev_name_list holds one "<name> <ip> <netmask>" entry per line.
+	 */
+	char *list = strdup(dev_name_list);
+	char *save_line;
+	char *line = strtok_r(list, "\n", &save_line);
 
-	if (getifaddrs(&ifap) != 0) {
-		perror("getifaddrs: ");
+	while (line != NULL) {
+		char *save_tok;
+		char *name = strtok_r(line, " \t", &save_tok);
+		char *ip   = name ? strtok_r(NULL, " \t", &save_tok) : NULL;
+		char *mask = ip   ? strtok_r(NULL, " \t", &save_tok) : NULL;
+		int portid;
+		struct rte_ether_addr mac;
+
+		if (name == NULL) {
+			line = strtok_r(NULL, "\n", &save_line);
+			continue;
+		}
+		if (ip == NULL || mask == NULL) {
+			TRACE_ERROR("Interface '%s' needs an IP and netmask, e.g. "
+				    "`port = %s 10.0.0.1 255.255.255.0`\n", name, name);
+			exit(EXIT_FAILURE);
+		}
+
+		portid = get_port_index(name);
+		if (portid < 0 || portid >= num_devices) {
+			TRACE_ERROR("Interface '%s' maps to DPDK port %d, but only "
+				    "%d port(s) are available.\n",
+				    name, portid, num_devices);
+			exit(EXIT_FAILURE);
+		}
+
+		eidx = CONFIG.eths_num++;
+		strncpy(CONFIG.eths[eidx].dev_name, name,
+			sizeof(CONFIG.eths[eidx].dev_name) - 1);
+		CONFIG.eths[eidx].ifindex = portid;
+		CONFIG.eths[eidx].ip_addr = inet_addr(ip);
+		CONFIG.eths[eidx].netmask = inet_addr(mask);
+
+		/* MAC address comes straight from the RTE port */
+		rte_eth_macaddr_get(portid, &mac);
+		for (j = 0; j < ETH_ALEN; j++)
+			CONFIG.eths[eidx].haddr[j] = mac.addr_bytes[j];
+
+		if (strstr(port_stat_list, name) != NULL)
+			CONFIG.eths[eidx].stat_print = TRUE;
+
+		devices_attached[num_devices_attached++] = portid;
+
+		line = strtok_r(NULL, "\n", &save_line);
+	}
+	free(list);
+
+	if (CONFIG.eths_num == 0) {
+		TRACE_ERROR("No interface configured. Add `port = <dpdkN> <ip> "
+			    "<netmask>` line(s) to the config.\n");
 		exit(EXIT_FAILURE);
 	}
 
-	iter_if = ifap;
-	do {
-		if (iter_if->ifa_addr && iter_if->ifa_addr->sa_family == AF_INET &&
-		    !set_all_inf &&
-		    (seek=strstr(dev_name_list, iter_if->ifa_name)) != NULL &&
-		    /* check if the interface was not aliased */
-		    *(seek + strlen(iter_if->ifa_name)) != ':') {
-			struct ifreq ifr;
-
-			/* Setting informations */
-			eidx = CONFIG.eths_num++;
-			strcpy(CONFIG.eths[eidx].dev_name, iter_if->ifa_name);
-			strcpy(ifr.ifr_name, iter_if->ifa_name);
-
-			/* Create socket */
-			int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-			if (sock == -1) {
-				perror("socket");
-				exit(EXIT_FAILURE);
-			}
-
-			/* getting address */
-			if (ioctl(sock, SIOCGIFADDR, &ifr) == 0 ) {
-				struct in_addr sin = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
-				CONFIG.eths[eidx].ip_addr = *(uint32_t *)&sin;
-			}
-
-			if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0 ) {
-				for (j = 0; j < ETH_ALEN; j ++) {
-					CONFIG.eths[eidx].haddr[j] = ifr.ifr_addr.sa_data[j];
-				}
-			}
-
-			/* Net MASK */
-			if (ioctl(sock, SIOCGIFNETMASK, &ifr) == 0) {
-				struct in_addr sin = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
-				CONFIG.eths[eidx].netmask = *(uint32_t *)&sin;
-			}
-			close(sock);
-
-			for (j = 0; j < num_devices; j++) {
-				if (!memcmp(&CONFIG.eths[eidx].haddr[0], &ports_eth_addr[j],
-					    ETH_ALEN))
-					CONFIG.eths[eidx].ifindex = j;
-			}
-
-			/* add to attached devices */
-			for (j = 0; j < num_devices_attached; j++) {
-				if (devices_attached[j] == CONFIG.eths[eidx].ifindex) {
-					break;
-				}
-			}
-			devices_attached[num_devices_attached] = CONFIG.eths[eidx].ifindex;
-			num_devices_attached++;
-			fprintf(stderr, "Total number of attached devices: %d\n",
-				num_devices_attached);
-			fprintf(stderr, "Interface name: %s\n",
-				iter_if->ifa_name);
-		}
-		iter_if = iter_if->ifa_next;
-	} while (iter_if != NULL);
-
-	freeifaddrs(ifap);
-
 	/* check if process is primary or secondary */
-	CONFIG.multi_process_is_master = (rte_eal_process_type() == RTE_PROC_PRIMARY) ?
-		1 : 0;
+	CONFIG.multi_process_is_master =
+		(rte_eal_process_type() == RTE_PROC_PRIMARY) ? 1 : 0;
 
-	CONFIG.nif_to_eidx = (int*)calloc(MAX_DEVICES, sizeof(int));
-
-	if (!CONFIG.nif_to_eidx) {
-	        exit(EXIT_FAILURE);
-	}
-
-	for (i = 0; i < MAX_DEVICES; ++i) {
-	        CONFIG.nif_to_eidx[i] = -1;
-	}
-
+	/* STEP 5: build the port-id -> config-index map */
+	CONFIG.nif_to_eidx = (int *)calloc(MAX_DEVICES, sizeof(int));
+	if (!CONFIG.nif_to_eidx)
+		exit(EXIT_FAILURE);
+	for (i = 0; i < MAX_DEVICES; ++i)
+		CONFIG.nif_to_eidx[i] = -1;
 	for (i = 0; i < CONFIG.eths_num; ++i) {
-
 		j = CONFIG.eths[i].ifindex;
 		if (j >= MAX_DEVICES) {
-		        TRACE_ERROR("ifindex of eths_%d exceed the limit: %d\n", i, j);
-		        exit(EXIT_FAILURE);
+			TRACE_ERROR("ifindex of eths_%d exceeds the limit: %d\n", i, j);
+			exit(EXIT_FAILURE);
 		}
-
-		/* the physic port index of the i-th port listed in the config file is j*/
 		CONFIG.nif_to_eidx[j] = i;
-
-		/* finally set the port stats option `on' */
-		if (strstr(port_stat_list, CONFIG.eths[i].dev_name) != 0)
-			CONFIG.eths[i].stat_print = TRUE;
 	}
 
 	return 0;

@@ -509,9 +509,12 @@ SetMultiProcessSupport(char *multiprocess_details)
 }
 /*----------------------------------------------------------------------------*/
 static inline void
-SaveInterfaceInfo(char *dev_name_list)
+SaveInterfaceInfo(char *name, char *ip, char *netmask)
 {
-	strcpy(port_list, dev_name_list);
+	/* accumulate one "<name> <ip> <netmask>" entry per `port =` line */
+	size_t len = strlen(port_list);
+	snprintf(port_list + len, MAX_OPTLINE_LEN - len,
+		 "%s %s %s\n", name, ip, netmask);
 }
 /*----------------------------------------------------------------------------*/
 static inline void
@@ -596,10 +599,15 @@ ParseConfiguration(char *line)
 	} else if (strcmp(p, "stat_print") == 0) {
 		SaveInterfaceStatList(line + strlen(p) + 1);
 	} else if (strcmp(p, "port") == 0) {
-		if(strncmp(q, ALL_STRING, sizeof(ALL_STRING)) == 0)
-			SaveInterfaceInfo(q);
-		else
-			SaveInterfaceInfo(line + strlen(p) + 1);
+		/* format: port = <name> <ip> <netmask> */
+		char *ip   = strtok_r(NULL, " \t=", &saveptr);
+		char *mask = ip ? strtok_r(NULL, " \t=", &saveptr) : NULL;
+		if (ip == NULL || mask == NULL) {
+			TRACE_CONFIG("port requires <name> <ip> <netmask> "
+				     "(line: %s)\n", line);
+			return -1;
+		}
+		SaveInterfaceInfo(q, ip, mask);
 	} else if (strcmp(p, "io") == 0) {
 		AssignIOModule(q);
 		if (CheckIOModuleAccessPermissions() == -1) {
