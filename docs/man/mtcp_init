@@ -21,15 +21,9 @@ parameters:
 
 .TP 17
 .IP "io"
-The underlying I/O driver he/she wants to use for his/her application.
-A user can specify either
-.I "dpdk"
-or
-.I "psio"
-(but not both) as the choice of the network I/O driver. Please note
-that
-.I "psio"
-is only supported for linux-2.6.32~linux-2.6.38 kernels.
+The underlying I/O driver the user wants to use for the application.
+The only supported network I/O driver is
+.I "dpdk" .
 
 .IP "num_cores"
 The number of cores one needs to use to run the mTCP application.

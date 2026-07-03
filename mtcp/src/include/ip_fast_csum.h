@@ -1,7 +1,7 @@
 #ifndef IP_FAST_CSUM_H
 #define IP_FAST_CSUM_H
 /*----------------------------------------------------------------------------*/
-/* IP header checksum, formerly provided by the removed PSIO ps.h header. */
+/* IP header checksum helper. */
 #include <linux/types.h>
 /*----------------------------------------------------------------------------*/
 #if defined(__i386__) || defined(__x86_64__)
