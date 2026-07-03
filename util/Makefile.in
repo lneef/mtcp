@@ -6,7 +6,7 @@ GCC_OPT = -m64
 else
 GCC_OPT =
 endif
-GCC_OPT += -Wall -fPIC -c
+GCC_OPT += -Wall -fPIC -fcommon -c
 GCC_OPT += -DNDEBUG -O3 -DNETSTAT -DINFO -DDBGERR -DDBGCERR
 
 

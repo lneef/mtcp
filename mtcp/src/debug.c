@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include "debug.h"
+#include "ip_fast_csum.h"
 #include "tcp_in.h"
 #include "logger.h"
 

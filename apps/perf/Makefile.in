@@ -1,13 +1,10 @@
 # TODO: Make this Makefile.in pretty
 
 TARGETS = epserver epwget
-CC=@CC@ -g -O3 -Wall -Werror -fgnu89-inline
+CC=@CC@ -g -O3 -Wall -fgnu89-inline -fcommon
 DPDK=@DPDK@
-PS=@PSIO@
-NETMAP=@NETMAP@
-ONVM=@ONVM@
 CCP=@CCP@
-CFLAGS=@CFLAGS@
+CFLAGS=@CFLAGS@ $(shell pkg-config --cflags libdpdk)
 
 # Add arch-specific optimization
 ifeq ($(shell uname -m),x86_64)
@@ -28,36 +25,9 @@ UTIL_OBJ = ${UTIL_FLD}/http_parsing.o ${UTIL_FLD}/tdate_parse.o ${UTIL_FLD}/netl
 INC = -I./include/ ${UTIL_INC} ${MTCP_INC} -I${UTIL_FLD}/include
 LIBS = ${MTCP_LIB}
 
-# psio-specific variables
-ifeq ($(PS),1)
-PS_DIR = ../../io_engine/
-PS_INC = ${PS_DIR}/include
-INC += -I{PS_INC}
-LIBS += -lmtcp -L${PS_DIR}/lib -lps -lpthread -lnuma -lrt
-endif
-
-# netmap-specific variables
-ifeq ($(NETMAP),1)
-LIBS += -lmtcp -lpthread -lnuma -lrt
-endif
-
-# dpdk-specific variables
-ifeq ($(DPDK),1)
-DPDK_MACHINE_LINKER_FLAGS=$${RTE_SDK}/$${RTE_TARGET}/lib/ldflags.txt
-DPDK_MACHINE_LDFLAGS=$(shell cat ${DPDK_MACHINE_LINKER_FLAGS})
-LIBS += -g -O3 -pthread -lrt -march=native ${MTCP_FLD}/lib/libmtcp.a -lnuma -lmtcp -lpthread -lrt -ldl -lgmp -L${RTE_SDK}/${RTE_TARGET}/lib ${DPDK_MACHINE_LDFLAGS}
-endif
-
-# onvm-specific variables
-ifeq ($(ONVM),1)
-ifeq ($(RTE_TARGET),)
-$(error "Please define RTE_TARGET environment variable")
-endif
-
-INC += -I@ONVMLIBPATH@/onvm_nflib
-INC += -DENABLE_ONVM
-LIBS += @ONVMLIBPATH@/onvm_nflib/$(RTE_TARGET)/libonvm.a
-endif
+# dpdk-specific variables (via pkg-config)
+DPDK_LIBS := $(shell pkg-config --libs libdpdk)
+LIBS += -g -O3 -pthread -lrt ${MTCP_FLD}/lib/libmtcp.a -lnuma -lpthread -lrt -ldl -lgmp -lm $(DPDK_LIBS)
 
 ifeq ($V,) # no echo
 	export MSG=@echo

@@ -40,11 +40,6 @@ struct mtcp_config CONFIG = {
 #if USE_CCP
 	.cc           	  =         		"reno\n",
 #endif
-#ifdef ENABLE_ONVM
-	.onvm_inst	  =			(uint16_t) -1,
-	.onvm_dest	  =			(uint16_t) -1,
-	.onvm_serv	  =			(uint16_t) -1
-#endif
 };
 addr_pool_t ap[ETH_NUM] = 			{NULL};
 static char port_list[MAX_OPTLINE_LEN] = 	"";
@@ -112,51 +107,27 @@ EnrollRouteTableEntry(char *optstr)
 {
 	char *daddr_s;
 	char *prefix;
-#ifdef DISABLE_NETMAP 
 	char *dev;
 	int i;
-#endif
 	int ifidx;
 	int ridx;
 	char *saveptr;
- 
+
 	saveptr = NULL;
 	daddr_s = strtok_r(optstr, "/", &saveptr);
 	prefix = strtok_r(NULL, " ", &saveptr);
-#ifdef DISABLE_NETMAP
 	dev = strtok_r(NULL, "\n", &saveptr);
-#endif
+
 	assert(daddr_s != NULL);
 	assert(prefix != NULL);
-#ifdef DISABLE_NETMAP	
 	assert(dev != NULL);
-#endif
 
 	ifidx = -1;
-	if (current_iomodule_func == &ps_module_func) {
-#ifndef DISABLE_PSIO		
-		for (i = 0; i < num_devices; i++) {
-			if (strcmp(dev, devices[i].name) != 0)
-				continue;
-			
-			ifidx = devices[i].ifindex;
-			break;
-		}
-		if (ifidx == -1) {
-			TRACE_CONFIG("Interface %s does not exist!\n", dev);
-			exit(4);
-		}
-#endif
-	} else if (current_iomodule_func == &dpdk_module_func ||
-		   current_iomodule_func == &onvm_module_func) {
-#ifndef DISABLE_DPDK
-		for (i = 0; i < num_devices; i++) {
-			if (strcmp(CONFIG.eths[i].dev_name, dev))
-				continue;
-			ifidx = CONFIG.eths[i].ifindex;
-			break;
-		}
-#endif
+	for (i = 0; i < num_devices; i++) {
+		if (strcmp(CONFIG.eths[i].dev_name, dev))
+			continue;
+		ifidx = CONFIG.eths[i].ifindex;
+		break;
 	}
 
 	ridx = CONFIG.routes++;
@@ -640,14 +611,6 @@ ParseConfiguration(char *line)
 		}
 	} else if (strcmp(p, "num_mem_ch") == 0) {
 		CONFIG.num_mem_ch = mystrtol(q, 10);
-#ifdef ENABLE_ONVM
-	} else if (strcmp(p, "onvm_inst") == 0) {
-		CONFIG.onvm_inst = mystrtol(q, 10);
-	} else if (strcmp(p, "onvm_serv") == 0) {
-		CONFIG.onvm_serv = mystrtol(q, 10);
-	} else if (strcmp(p, "onvm_dest") == 0) {
-		CONFIG.onvm_dest = mystrtol(q, 10);
-#endif
 	} else if (strcmp(p, "multiprocess") == 0) {
 		SetMultiProcessSupport(line + strlen(p) + 1);
     } else if (strcmp(p, "cc") == 0) {

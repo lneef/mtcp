@@ -87,11 +87,7 @@
 
 #define ETHER_IFG			12
 #define	ETHER_PREAMBLE			8
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-#define ETHER_OVR			(ETHER_CRC_LEN + ETHER_PREAMBLE + ETHER_IFG)
-#else
 #define ETHER_OVR			(RTE_ETHER_CRC_LEN + ETHER_PREAMBLE + ETHER_IFG)
-#endif
 
 static const uint16_t nb_rxd = 		RTE_TEST_RX_DESC_DEFAULT;
 static const uint16_t nb_txd = 		RTE_TEST_TX_DESC_DEFAULT;
@@ -102,56 +98,33 @@ static struct rte_mempool *pktmbuf_pool[MAX_CPUS] = {NULL};
 //#define DEBUG				1
 #ifdef DEBUG
 /* ethernet addresses of ports */
-static struct ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
+static struct rte_ether_addr ports_eth_addr[RTE_MAX_ETHPORTS];
 #endif
 
 static struct rte_eth_dev_info dev_info[RTE_MAX_ETHPORTS];
 
 static struct rte_eth_conf port_conf = {
 	.rxmode = {
-		.mq_mode	= 	ETH_MQ_RX_RSS,
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-		.max_rx_pkt_len = 	ETHER_MAX_LEN,
-#else
-		.max_rx_pkt_len = 	RTE_ETHER_MAX_LEN,
-#endif
-#if RTE_VERSION > RTE_VERSION_NUM(17, 8, 0, 0)
-		.offloads	=	(
-#if RTE_VERSION < RTE_VERSION_NUM(18, 5, 0, 0)
-					 DEV_RX_OFFLOAD_CRC_STRIP |
-#endif /* !18.05 */
-					 DEV_RX_OFFLOAD_CHECKSUM
+		.mq_mode	= 	RTE_ETH_MQ_RX_RSS,
+		.mtu		= 	RTE_ETHER_MTU,
+		.offloads	=	(RTE_ETH_RX_OFFLOAD_CHECKSUM
 #ifdef ENABLELRO
-					 | DEV_RX_OFFLOAD_TCP_LRO
+					 | RTE_ETH_RX_OFFLOAD_TCP_LRO
 #endif
 					 ),
-#endif /* !17.08 */
-		.split_hdr_size = 	0,
-#if RTE_VERSION < RTE_VERSION_NUM(18, 5, 0, 0)
-		.header_split   = 	0, /**< Header Split disabled */
-		.hw_ip_checksum = 	1, /**< IP checksum offload enabled */
-		.hw_vlan_filter = 	0, /**< VLAN filtering disabled */
-		.jumbo_frame    = 	0, /**< Jumbo Frame Support disabled */
-		.hw_strip_crc   = 	1, /**< CRC stripped by hardware */
-#endif /* !18.05 */
-#ifdef ENABLELRO
-		.enable_lro	=	1, /**< Enable LRO */
-#endif
 	},
 	.rx_adv_conf = {
 		.rss_conf = {
 			.rss_key = 	NULL,
-			.rss_hf = 	ETH_RSS_TCP | ETH_RSS_UDP |
-					ETH_RSS_IP | ETH_RSS_L2_PAYLOAD
+			.rss_hf = 	RTE_ETH_RSS_TCP | RTE_ETH_RSS_UDP |
+					RTE_ETH_RSS_IP | RTE_ETH_RSS_L2_PAYLOAD
 		},
 	},
 	.txmode = {
-		.mq_mode = 		ETH_MQ_TX_NONE,
-#if RTE_VERSION >= RTE_VERSION_NUM(18, 5, 0, 0)
-		.offloads	=	(DEV_TX_OFFLOAD_IPV4_CKSUM |
-					 DEV_TX_OFFLOAD_UDP_CKSUM |
-					 DEV_TX_OFFLOAD_TCP_CKSUM)
-#endif
+		.mq_mode = 		RTE_ETH_MQ_TX_NONE,
+		.offloads	=	(RTE_ETH_TX_OFFLOAD_IPV4_CKSUM |
+					 RTE_ETH_TX_OFFLOAD_UDP_CKSUM |
+					 RTE_ETH_TX_OFFLOAD_TCP_CKSUM)
 	},
 };
 
@@ -172,13 +145,6 @@ static const struct rte_eth_txconf tx_conf = {
 	},
 	.tx_free_thresh = 		0, /* Use PMD default values */
 	.tx_rs_thresh = 		0, /* Use PMD default values */
-#if RTE_VERSION < RTE_VERSION_NUM(18, 5, 0, 0)
-	/*
-	 * As the example won't handle mult-segments and offload cases,
-	 * set the flag by default.
-	 */
-	.txq_flags = 			0x0,
-#endif
 };
 
 struct mbuf_table {
@@ -420,7 +386,7 @@ dpdk_get_wptr(struct mtcp_thread_context *ctxt, int ifidx, uint16_t pktsize)
 	m = dpc->wmbufs[ifidx].m_table[len_of_mbuf];
 
 	/* retrieve the right write offset */
-	ptr = (void *)rte_pktmbuf_mtod(m, struct ether_hdr *);
+	ptr = (void *)rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
 	m->pkt_len = m->data_len = pktsize;
 	m->nb_segs = 1;
 	m->next = NULL;
@@ -461,7 +427,7 @@ dpdk_recv_pkts(struct mtcp_thread_context *ctxt, int ifidx)
 	}
 
 	int portid = CONFIG.eths[ifidx].ifindex;
-	ret = rte_eth_rx_burst((uint8_t)portid, ctxt->cpu,
+	ret = rte_eth_rx_burst((uint16_t)portid, ctxt->cpu,
 			       dpc->pkts_burst, MAX_PKT_BURST);
 #ifdef RX_IDLE_ENABLE
 	dpc->rx_idle = (likely(ret != 0)) ? 0 : dpc->rx_idle + 1;
@@ -475,16 +441,16 @@ dpdk_recv_pkts(struct mtcp_thread_context *ctxt, int ifidx)
 struct rte_mbuf *
 ip_reassemble(struct dpdk_private_context *dpc, struct rte_mbuf *m)
 {
-	struct ether_hdr *eth_hdr;
+	struct rte_ether_hdr *eth_hdr;
 	struct rte_ip_frag_tbl *tbl;
 	struct rte_ip_frag_death_row *dr;
 
 	/* if packet is IPv4 */
 	if (RTE_ETH_IS_IPV4_HDR(m->packet_type)) {
-		struct ipv4_hdr *ip_hdr;
+		struct rte_ipv4_hdr *ip_hdr;
 
-		eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
-		ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
+		eth_hdr = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
+		ip_hdr = (struct rte_ipv4_hdr *)(eth_hdr + 1);
 
 		/* if it is a fragmented packet, then try to reassemble. */
 		if (rte_ipv4_frag_pkt_is_fragmented(ip_hdr)) {
@@ -534,7 +500,7 @@ dpdk_get_rptr(struct mtcp_thread_context *ctxt, int ifidx, int index, uint16_t *
 	dpc->rmbufs[ifidx].m_table[index] = m;
 
 	/* verify checksum values from ol_flags */
-	if ((m->ol_flags & (PKT_RX_L4_CKSUM_BAD | PKT_RX_IP_CKSUM_BAD)) != 0) {
+	if ((m->ol_flags & (RTE_MBUF_F_RX_L4_CKSUM_BAD | RTE_MBUF_F_RX_IP_CKSUM_BAD)) != 0) {
 		TRACE_ERROR("%s(%p, %d, %d): mbuf with invalid checksum: "
 			    "%p(%lu);\n",
 			    __func__, ctxt, ifidx, index, m, m->ol_flags);
@@ -585,12 +551,13 @@ dpdk_destroy_handle(struct mtcp_thread_context *ctxt)
 }
 /*----------------------------------------------------------------------------*/
 static void
-check_all_ports_link_status(uint8_t port_num, uint32_t port_mask)
+check_all_ports_link_status(uint16_t port_num, uint32_t port_mask)
 {
 #define CHECK_INTERVAL 			100 /* 100ms */
 #define MAX_CHECK_TIME 			90 /* 9s (90 * 100ms) in total */
 
-	uint8_t portid, count, all_ports_up, print_flag = 0;
+	uint16_t portid;
+	uint8_t count, all_ports_up, print_flag = 0;
 	struct rte_eth_link link;
 
 	printf("\nChecking link status");
@@ -608,7 +575,7 @@ check_all_ports_link_status(uint8_t port_num, uint32_t port_mask)
 					printf("Port %d Link Up - speed %u "
 						"Mbps - %s\n", (uint8_t)portid,
 						(unsigned)link.link_speed,
-				(link.link_duplex == ETH_LINK_FULL_DUPLEX) ?
+				(link.link_duplex == RTE_ETH_LINK_FULL_DUPLEX) ?
 					("full-duplex") : ("half-duplex\n"));
 				else
 					printf("Port %d Link Down\n",
@@ -675,7 +642,7 @@ dpdk_load_module(void)
 			 */
 
 			nb_mbuf = RTE_MAX(max_flows, 2UL * MAX_PKT_BURST) * MAX_FRAG_NUM;
-			nb_mbuf *= (port_conf.rxmode.max_rx_pkt_len + BUF_SIZE - 1) / BUF_SIZE;
+			nb_mbuf *= (port_conf.rxmode.mtu + BUF_SIZE - 1) / BUF_SIZE;
 			nb_mbuf += RTE_TEST_RX_DESC_DEFAULT + RTE_TEST_TX_DESC_DEFAULT;
 
 			nb_mbuf = RTE_MAX(nb_mbuf, (uint32_t)NB_MBUF);
@@ -687,8 +654,8 @@ dpdk_load_module(void)
 				sizeof(struct rte_pktmbuf_pool_private),
 				rte_pktmbuf_pool_init, NULL,
 				rte_pktmbuf_init, NULL,
-				rte_socket_id(), MEMPOOL_F_SP_PUT |
-				MEMPOOL_F_SC_GET);
+				rte_socket_id(), RTE_MEMPOOL_F_SP_PUT |
+				RTE_MEMPOOL_F_SC_GET);
 
 			if (pktmbuf_pool[rxlcore_id] == NULL)
 				rte_exit(EXIT_FAILURE, "Cannot init mbuf pool, errno: %d\n",
@@ -703,10 +670,8 @@ dpdk_load_module(void)
 
 			/* check port capabilities */
 			rte_eth_dev_info_get(portid, &dev_info[portid]);
-#if RTE_VERSION >= RTE_VERSION_NUM(18, 5, 0, 0)
 			/* re-adjust rss_hf */
 			port_conf.rx_adv_conf.rss_conf.rss_hf &= dev_info[portid].flow_type_rss_offloads;
-#endif
 			/* init port */
 			printf("Initializing port %u... ", (unsigned) portid);
 			fflush(stdout);
@@ -761,7 +726,7 @@ dpdk_load_module(void)
                                 TRACE_INFO("Failed to get flow control info!\n");
 
 			/* and just disable the rx/tx flow control */
-			fc_conf.mode = RTE_FC_NONE;
+			fc_conf.mode = RTE_ETH_FC_NONE;
 			ret = rte_eth_dev_flow_ctrl_set(portid, &fc_conf);
                         if (ret != 0)
                                 TRACE_INFO("Failed to set flow control info!: errno: %d\n",
@@ -829,40 +794,32 @@ dpdk_dev_ioctl(struct mtcp_thread_context *ctx, int nif, int cmd, void *argp)
 
 	switch (cmd) {
 	case PKT_TX_IP_CSUM:
-		if ((dev_info[nif].tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) == 0)
+		if ((dev_info[nif].tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) == 0)
 			goto dev_ioctl_err;
 		m = dpc->wmbufs[eidx].m_table[len_of_mbuf - 1];
-		m->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-		m->l2_len = sizeof(struct ether_hdr);
-#else
+		m->ol_flags = RTE_MBUF_F_TX_IP_CKSUM | RTE_MBUF_F_TX_IPV4;
 		m->l2_len = sizeof(struct rte_ether_hdr);
-#endif
 		m->l3_len = (iph->ihl<<2);
 		break;
 	case PKT_TX_TCP_CSUM:
-		if ((dev_info[nif].tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM) == 0)
+		if ((dev_info[nif].tx_offload_capa & RTE_ETH_TX_OFFLOAD_TCP_CKSUM) == 0)
 			goto dev_ioctl_err;
 		m = dpc->wmbufs[eidx].m_table[len_of_mbuf - 1];
 		tcph = (struct tcphdr *)((unsigned char *)iph + (iph->ihl<<2));
-		m->ol_flags |= PKT_TX_TCP_CKSUM;
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-		tcph->check = rte_ipv4_phdr_cksum((struct ipv4_hdr *)iph, m->ol_flags);
-#else
+		m->ol_flags |= RTE_MBUF_F_TX_TCP_CKSUM;
 		tcph->check = rte_ipv4_phdr_cksum((struct rte_ipv4_hdr *)iph, m->ol_flags);
-#endif
 		break;
 #ifdef ENABLELRO
 	case PKT_RX_TCP_LROSEG:
 		m = dpc->cur_rx_m;
 		//if (m->next != NULL)
 		//	rte_prefetch0(rte_pktmbuf_mtod(m->next, void *));
-		iph = rte_pktmbuf_mtod_offset(m, struct iphdr *, sizeof(struct ether_hdr));
+		iph = rte_pktmbuf_mtod_offset(m, struct iphdr *, sizeof(struct rte_ether_hdr));
 		tcph = (struct tcphdr *)((u_char *)iph + (iph->ihl << 2));
 		payload = (uint8_t *)tcph + (tcph->doff << 2);
 
 		seg_off = m->data_len -
-			sizeof(struct ether_hdr) - (iph->ihl << 2) -
+			sizeof(struct rte_ether_hdr) - (iph->ihl << 2) -
 			(tcph->doff << 2);
 
 		to = (uint8_t *) argp;
@@ -880,43 +837,31 @@ dpdk_dev_ioctl(struct mtcp_thread_context *ctx, int nif, int cmd, void *argp)
 		break;
 #endif
 	case PKT_TX_TCPIP_CSUM:
-		if ((dev_info[nif].tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) == 0)
+		if ((dev_info[nif].tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) == 0)
 			goto dev_ioctl_err;
-		if ((dev_info[nif].tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM) == 0)
+		if ((dev_info[nif].tx_offload_capa & RTE_ETH_TX_OFFLOAD_TCP_CKSUM) == 0)
 			goto dev_ioctl_err;
 		m = dpc->wmbufs[eidx].m_table[len_of_mbuf - 1];
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-		iph = rte_pktmbuf_mtod_offset(m, struct iphdr *, sizeof(struct ether_hdr));
-#else
 		iph = rte_pktmbuf_mtod_offset(m, struct iphdr *, sizeof(struct rte_ether_hdr));
-#endif
 		tcph = (struct tcphdr *)((uint8_t *)iph + (iph->ihl<<2));
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-		m->l2_len = sizeof(struct ether_hdr);
-#else
 		m->l2_len = sizeof(struct rte_ether_hdr);
-#endif
 		m->l3_len = (iph->ihl<<2);
 		m->l4_len = (tcph->doff<<2);
-		m->ol_flags = PKT_TX_TCP_CKSUM | PKT_TX_IP_CKSUM | PKT_TX_IPV4;
-#if RTE_VERSION < RTE_VERSION_NUM(19, 8, 0, 0)
-		tcph->check = rte_ipv4_phdr_cksum((struct ipv4_hdr *)iph, m->ol_flags);
-#else
+		m->ol_flags = RTE_MBUF_F_TX_TCP_CKSUM | RTE_MBUF_F_TX_IP_CKSUM | RTE_MBUF_F_TX_IPV4;
 		tcph->check = rte_ipv4_phdr_cksum((struct rte_ipv4_hdr *)iph, m->ol_flags);
-#endif
 		break;
 	case PKT_RX_IP_CSUM:
-		if ((dev_info[nif].rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) == 0)
+		if ((dev_info[nif].rx_offload_capa & RTE_ETH_RX_OFFLOAD_IPV4_CKSUM) == 0)
 			goto dev_ioctl_err;
 		break;
 	case PKT_RX_TCP_CSUM:
-		if ((dev_info[nif].rx_offload_capa & DEV_RX_OFFLOAD_TCP_CKSUM) == 0)
+		if ((dev_info[nif].rx_offload_capa & RTE_ETH_RX_OFFLOAD_TCP_CKSUM) == 0)
 			goto dev_ioctl_err;
 		break;
 	case PKT_TX_TCPIP_CSUM_PEEK:
-		if ((dev_info[nif].tx_offload_capa & DEV_TX_OFFLOAD_IPV4_CKSUM) == 0)
+		if ((dev_info[nif].tx_offload_capa & RTE_ETH_TX_OFFLOAD_IPV4_CKSUM) == 0)
 			goto dev_ioctl_err;
-		if ((dev_info[nif].tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM) == 0)
+		if ((dev_info[nif].tx_offload_capa & RTE_ETH_TX_OFFLOAD_TCP_CKSUM) == 0)
 			goto dev_ioctl_err;
 		break;
 	default:

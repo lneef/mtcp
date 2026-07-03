@@ -1,7 +1,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include "ps.h"
+#include <stdint.h>
+
+#ifndef MAX_DEVICES
+#define MAX_DEVICES		16
+#endif
 
 extern int num_cpus;
 extern int num_queues;

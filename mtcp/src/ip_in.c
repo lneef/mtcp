@@ -4,8 +4,8 @@
 #include "ip_in.h"
 #include "tcp_in.h"
 #include "mtcp_api.h"
-#include "ps.h"
 #include "debug.h"
+#include "ip_fast_csum.h"
 #include "icmp.h"
 
 #define ETH_P_IP_FRAG   0xF800

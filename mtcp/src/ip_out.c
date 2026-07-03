@@ -3,6 +3,7 @@
 #include "eth_out.h"
 #include "arp.h"
 #include "debug.h"
+#include "ip_fast_csum.h"
 
 /*----------------------------------------------------------------------------*/
 inline int

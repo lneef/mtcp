@@ -3,11 +3,14 @@
 /*----------------------------------------------------------------------------*/
 /* for type def'ns */
 #include <stdint.h>
-/* for ps lib funcs */
-#include "ps.h"
-#ifndef DISABLE_DPDK
-/* for dpdk/onvm big ints */
+/* for cpumask big ints */
 #include <gmp.h>
+/*----------------------------------------------------------------------------*/
+#ifndef ETH_ALEN
+#define ETH_ALEN		6
+#endif
+#ifndef MAX_DEVICES
+#define MAX_DEVICES		16
 #endif
 /*----------------------------------------------------------------------------*/
 /**
@@ -90,21 +93,8 @@ extern io_module_func *current_iomodule_func;
 #define PKT_TX_TCPIP_CSUM_PEEK	0x07
 #define DRV_NAME		0x08
 
-/* registered psio context */
-#ifdef DISABLE_PSIO
-#define ps_list_devices(x) 		0
-#endif
-extern io_module_func ps_module_func;
-extern struct ps_device devices[MAX_DEVICES];
-
 /* registered dpdk context */
 extern io_module_func dpdk_module_func;
-
-/* registered netmap context */
-extern io_module_func netmap_module_func;
-
-/* registered onvm context */
-extern io_module_func onvm_module_func;
 
 /* check I/O module access permissions */
 int
@@ -112,14 +102,8 @@ CheckIOModuleAccessPermissions();
 
 /* Macro to assign IO module */
 #define AssignIOModule(m) {						\
-		if (!strcmp(m, "psio"))					\
-			current_iomodule_func = &ps_module_func;	\
-		else if (!strcmp(m, "dpdk"))				\
+		if (!strcmp(m, "dpdk"))				\
 			current_iomodule_func = &dpdk_module_func;	\
-		else if (!strcmp(m, "netmap"))				\
-			current_iomodule_func = &netmap_module_func;	\
- 		else if (!strcmp(m, "onvm"))				\
-  			current_iomodule_func = &onvm_module_func;	\
 		else							\
 			assert(0);					\
 	}

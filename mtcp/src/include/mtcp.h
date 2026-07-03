@@ -18,14 +18,9 @@
 #include "mtcp_api.h"
 #include "eventpoll.h"
 #include "addr_pool.h"
-#include "ps.h"
 #include "logger.h"
-#include "stat.h"
 #include "io_module.h"
-
-#ifdef ENABLE_ONVM
-#include "onvm_nflib.h"
-#endif
+#include "stat.h"
 
 #ifndef TRUE
 #define TRUE (1)
@@ -181,13 +176,6 @@ struct mtcp_config
 	uint8_t multi_process;
 	uint8_t multi_process_is_master;
 
-#ifdef ENABLE_ONVM
-	struct onvm_nf_local_ctx *nf_local_ctx;
-	/* onvm specific args */
-	uint16_t onvm_serv;
-  	uint16_t onvm_inst;
-  	uint16_t onvm_dest;
-#endif
 #if USE_CCP
     char     cc[CC_NAME];
 #endif

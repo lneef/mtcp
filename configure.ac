@@ -11,10 +11,6 @@ AC_PROG_CC
 AC_PROG_RANLIB
 AC_LANG(C)
 AC_DISABLE_OPTION_CHECKING
-AC_CHECK_PROG(BC_CHECK,bc,yes)
-if test x"$BC_CHECK" != x"yes" ; then
-    AC_MSG_ERROR([Please install bc before compiling mTCP.])
-fi
 
 # Checks for header files.
 AC_HEADER_STDC
@@ -34,14 +30,6 @@ AC_CHECK_HEADER([sys/socket.h],,AC_MSG_ERROR([Could not find sys/socket.h]))
 AC_CHECK_HEADER([sys/time.h],,AC_MSG_ERROR([Could not find sys/time.h]))
 AC_CHECK_HEADER([unistd.h],,AC_MSG_ERROR([Could not find unistd.h]))
 AC_CHECK_HEADER([gmp.h],,AC_MSG_ERROR([Could not find gmp.h]))
-
-# Check for AC_PTHREAD [FC is preventing this to be enabled..]
-#AX_PTHREAD( [
-#            AC_DEFINE(HAVE_PTHREAD,1,[Define if you have POSIX threads libraries and header files.])
-#            CLIBS="$PTHREAD_LIBS $LIBS"
-#            CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-#            LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
-#            CC="$PTHREAD_CC"],[])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -63,47 +51,40 @@ AC_FUNC_MMAP
 AC_CHECK_FUNC([clock_gettime],,AC_MSG_ERROR([librt library is missing]))
 AC_CHECK_FUNCS([bzero getpagesize gettimeofday memmove memset munmap select socket strchr strerror strstr strtol],,AC_MSG_ERROR([glibc library is missing]))
 
-# Reset DPDK to 0
-AC_SUBST(DPDK, 0)
-# Reset enforcement value
+# DPDK is the only supported packet I/O backend, located via pkg-config.
+AC_SUBST(DPDK, 1)
+# h/w checksum offloading (enabled by default)
+AC_SUBST(HWCSUM, 1)
+# dpdk LRO (disabled by default)
+AC_SUBST(LRO, 0)
+# rx-idle enforcement (disabled by default)
 AC_SUBST(ENFORCE_RX_IDLE, 0)
 AC_SUBST(RX_IDLE_THRESH, 0)
-# Reset DPDK's LRO to 0
-AC_SUBST(LRO, 0)
-# Reset PSIO to 0
-AC_SUBST(PSIO, 0)
-# Reset ONVM to 0
-AC_SUBST(ONVM, 0)
-# Reset NETMAP to 0
-AC_SUBST(NETMAP, 0)
-# Reset HWCSUM to 1
-AC_SUBST(HWCSUM, 1)
 
-# Check dpdk-17.08 path (lib & inc)
-AC_ARG_WITH(stuff, [  --with-dpdk-lib      path to the dpdk-17.08 install root])
-if test "$with_dpdk_lib" != ""
-then
-        AC_SUBST(DPDKLIBPATH, $with_dpdk_lib)
-	AC_SUBST(DPDK, 1)
-	AC_ARG_WITH(stuff, [  --with-rx-idle[=ARG]	how much idle cycles needed before enforcing timeout (dpdk-only)])
-	if test "$with_rx_idle" != ""
-	then
-		AC_SUBST(ENFORCE_RX_IDLE, 1)
-		AC_SUBST(RX_IDLE_THRESH, $with_rx_idle)
-	fi
+# Locate DPDK via pkg-config.
+PKG_CONFIG=${PKG_CONFIG:-pkg-config}
+AC_MSG_CHECKING([for libdpdk via pkg-config])
+if $PKG_CONFIG --exists libdpdk; then
+	AC_MSG_RESULT([$($PKG_CONFIG --modversion libdpdk)])
+else
+	AC_MSG_ERROR([libdpdk not found via pkg-config. Install DPDK or set PKG_CONFIG_PATH.])
 fi
-AM_CONDITIONAL([DPDK], [test x$DPDK = x1])
+
+dnl how many idle cycles before enforcing rx timeout (dpdk-only)
+AC_ARG_WITH(rx-idle, [  --with-rx-idle[=ARG]	how many idle cycles before enforcing timeout])
+if test "$with_rx_idle" != ""
+then
+	AC_SUBST(ENFORCE_RX_IDLE, 1)
+	AC_SUBST(RX_IDLE_THRESH, $with_rx_idle)
+fi
 
 dnl Example of default-disabled feature
 AC_ARG_ENABLE([lro],
 	AS_HELP_STRING([--enable-lro], [Enable dpdk lro (for relevant NICs)]))
 
-if test "$with_dpdk_lib" != ""
+if test "x$enable_lro" = "xyes"
 then
-	if test "x$enable_lro" = "xyes"
-	then
-		AC_SUBST(LRO, 1)
-	fi
+	AC_SUBST(LRO, 1)
 fi
 
 dnl Example of default-disabled feature
@@ -124,35 +105,6 @@ then
 	AC_SUBST(HWCSUM, 0)
 fi
 
-# Check psio path (lib & inc)
-AC_ARG_WITH(stuff, [  --with-psio-lib      path to the ioengine install root])
-if test "$with_psio_lib" != ""
-then
-        AC_SUBST(PSLIBPATH, $with_psio_lib)
-	AC_SUBST(PSIO, 1)
-fi
-
-dnl Example of default-disabled feature
-AC_ARG_ENABLE([netmap],
-	AS_HELP_STRING([--enable-netmap], [Enable netmap module]))
-
-AS_IF([test "x$enable_netmap" = "xyes"], [
-	    AC_SUBST(NETMAP, 1)
-])
-
-# Check onvm lib path
-AC_ARG_WITH(stuff, [  --with-onvm-lib      path to the onvm install root])
-if test "$with_onvm_lib" != ""
-then
-	AC_SUBST(ONVMLIBPATH, $with_onvm_lib)
-	AC_SUBST(ONVM, 1)
-fi
-
-if test "$with_psio_lib" == "" && test "$with_dpdk_lib" == "" && test "$enable_netmap" = ""
-then
-	AC_MSG_ERROR([Packet I/O library is missing. Please set either dpdk or psio or netmap as your I/O lib.])
-fi
-
 if test "x$enable_ccp" = "xyes"
 then
 	AC_CHECK_LIB(startccp, libstartccp_run_forever, [echo "Found CCP library"], [
@@ -166,6 +118,3 @@ AC_OUTPUT(mtcp/src/Makefile)
 AC_OUTPUT(apps/example/Makefile)
 AC_OUTPUT(apps/perf/Makefile)
 AC_OUTPUT(util/Makefile)
-AC_OUTPUT(io_engine/lib/Makefile)
-
-bash ./.check_hyperthreading.sh
