@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([mtcp], [3], [mtcp-user@list.ndsl.kaist.edu])
-AC_CONFIG_SRCDIR([mtcp/src/eventpoll.c])
+AC_CONFIG_SRCDIR([mtcp/eventpoll.c])
 AC_CONFIG_HEADERS([config.h])
 
 # Checks for programs.
@@ -98,7 +98,7 @@ fi
 
 AM_INIT_AUTOMAKE(mtcp, 3)
 AC_CONFIG_FILES([Makefile])
-AC_OUTPUT(mtcp/src/Makefile)
+AC_OUTPUT(mtcp/Makefile)
 AC_OUTPUT(apps/example/Makefile)
 AC_OUTPUT(apps/perf/Makefile)
 AC_OUTPUT(util/Makefile)

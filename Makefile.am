@@ -1,2 +1,2 @@
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = mtcp/src util apps/example
+SUBDIRS = mtcp util apps/example

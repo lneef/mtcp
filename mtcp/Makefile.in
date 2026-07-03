@@ -7,10 +7,8 @@ DPDK=@DPDK@
 ENFORCE_RX_IDLE=@ENFORCE_RX_IDLE@
 LRO=@LRO@
 HWCSUM=@HWCSUM@
-MTCP_LIB_DIR=../lib
+MTCP_LIB_DIR=./lib
 MTCP_LIB=libmtcp.a
-MTCP_HDR_DIR=../include
-MTCP_HDR = mtcp_api.h mtcp_epoll.h
 
 ### GCC ###
 GCC=@CC@
@@ -88,7 +86,7 @@ endif
 ### GOALS ###
 all: default
 
-default: $(OBJS) $(MTCP_HDR)
+default: $(OBJS)
 	mkdir -p $(MTCP_LIB_DIR)
 	ar rvs $(MTCP_LIB_DIR)/$(MTCP_LIB) $(OBJS)
 
@@ -100,9 +98,6 @@ $(DEPS): .%.d: %.c Makefile
 
 -include $(DEPS)
 
-$(MTCP_HDR):
-	cp $(INC_DIR)/$@ $(MTCP_HDR_DIR)/$@
-
 clean: clean-library
 	$(MSG) "   CLEAN *.o's"
 	$(HIDE) rm -f *.o *~ core
@@ -112,8 +107,6 @@ clean: clean-library
 clean-library:
 	$(MSG) "   CLEAN *.a"
 	$(HIDE) rm -f $(MTCP_LIB_DIR)/*
-	$(MSG) "   CLEAN *.h"
-	$(HIDE) rm -f $(MTCP_HDR_DIR)/*
 
 distclean: clean
 	rm -f Makefile

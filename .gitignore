@@ -5,7 +5,8 @@ config.h
 config.log
 config.status
 dpdk-iface-kmod/dpdk_iface_main
-mtcp/src/Makefile
+mtcp/Makefile
+mtcp/lib/
 util/Makefile
 stamp-h1
 

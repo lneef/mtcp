@@ -593,7 +593,7 @@ PACKAGE_STRING='mtcp 3'
 PACKAGE_BUGREPORT='mtcp-user@list.ndsl.kaist.edu'
 PACKAGE_URL=''
 
-ac_unique_file="mtcp/src/eventpoll.c"
+ac_unique_file="mtcp/eventpoll.c"
 enable_option_checking=no
 # Factoring default headers for most tests.
 ac_includes_default="\
@@ -6152,7 +6152,7 @@ fi
 
 ac_config_files="$ac_config_files Makefile"
 
-ac_config_files="$ac_config_files mtcp/src/Makefile"
+ac_config_files="$ac_config_files mtcp/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -6844,7 +6844,7 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "mtcp/src/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/src/Makefile" ;;
+    "mtcp/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: '$ac_config_target'" "$LINENO" 5;;
   esac
@@ -8281,7 +8281,7 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "mtcp/src/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/src/Makefile" ;;
+    "mtcp/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/Makefile" ;;
     "apps/example/Makefile") CONFIG_FILES="$CONFIG_FILES apps/example/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: '$ac_config_target'" "$LINENO" 5;;
@@ -9723,7 +9723,7 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "mtcp/src/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/src/Makefile" ;;
+    "mtcp/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/Makefile" ;;
     "apps/example/Makefile") CONFIG_FILES="$CONFIG_FILES apps/example/Makefile" ;;
     "apps/perf/Makefile") CONFIG_FILES="$CONFIG_FILES apps/perf/Makefile" ;;
 
@@ -11170,7 +11170,7 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "mtcp/src/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/src/Makefile" ;;
+    "mtcp/Makefile") CONFIG_FILES="$CONFIG_FILES mtcp/Makefile" ;;
     "apps/example/Makefile") CONFIG_FILES="$CONFIG_FILES apps/example/Makefile" ;;
     "apps/perf/Makefile") CONFIG_FILES="$CONFIG_FILES apps/perf/Makefile" ;;
     "util/Makefile") CONFIG_FILES="$CONFIG_FILES util/Makefile" ;;

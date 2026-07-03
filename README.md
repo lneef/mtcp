@@ -24,11 +24,10 @@ Building the `dpdk-iface-kmod` helper requires kernel headers.
 
 ## Included directories
 
-mtcp: mtcp source code directory
-- mtcp/src: source code
-- mtcp/src/include: mTCP’s internal header files
-- mtcp/lib: library file
-- mtcp/include: header files that applications will use
+mtcp: the mTCP stack
+- mtcp/*.c: source code
+- mtcp/include: header files
+- mtcp/lib: built library (libmtcp.a)
 
 dpdk-iface-kmod: helper LKM exporting DPDK net_device stats to the OS
 
@@ -127,7 +126,7 @@ We tested the DPDK version (polling driver) with Linux-3.13.0 kernel.
    called at the application startup.
 
 3. The supported socket options are limited for right now. Please refer 
-   to the mtcp/src/api.c for more detail.
+   to the mtcp/api.c for more detail.
 
 4. The counterpart of mTCP should enable TCP timestamp.
 
