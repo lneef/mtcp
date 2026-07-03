@@ -70,9 +70,9 @@ mTCP builds against a system DPDK installation discovered via `pkg-config`.
 4. Build the mtcp library and example applications:
 
     ```bash
-    autoreconf -ivf
-    ./configure
-    make
+    autoreconf -ivf   # regenerate ./configure (once, or after editing configure.ac)
+    ./configure       # locate DPDK via pkg-config
+    make              # build libmtcp.a + apps/example (epserver, epwget)
     ```
 
     - By default, mTCP assumes that there are 16 CPUs in your system.
