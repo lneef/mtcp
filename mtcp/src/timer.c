@@ -3,9 +3,6 @@
 #include "tcp_out.h"
 #include "stat.h"
 #include "debug.h"
-#if USE_CCP
-#include "ccp.h"
-#endif
 
 #ifndef MAX
 #define MAX(a, b) ((a)>(b)?(a):(b))
@@ -192,10 +189,6 @@ HandleRTO(mtcp_manager_t mtcp, uint32_t cur_ts, tcp_stream *cur_stream)
 	/* if the stream is ready to be closed, don't handle RTO */
 	if (cur_stream->close_reason != TCP_NOT_CLOSED)
 		return 0;
-	
-#if USE_CCP
-	ccp_record_event(mtcp, cur_stream, EVENT_TIMEOUT, 0);
-#endif
 
 	/* count number of retransmissions */
 	if (cur_stream->sndvar->nrtx < TCP_MAX_RTX) {

@@ -3,7 +3,6 @@
 TARGETS = epserver epwget
 CC=@CC@ -g -O3 -Wall -fgnu89-inline -fcommon
 DPDK=@DPDK@
-CCP=@CCP@
 CFLAGS=@CFLAGS@ $(shell pkg-config --cflags libdpdk)
 
 # Add arch-specific optimization
@@ -35,13 +34,6 @@ ifeq ($V,) # no echo
 else
 	export MSG=@\#
 	export HIDE=
-endif
-
-ifeq ($(CCP), 1)
-# LIBCCP
-LIBCCP = $(MTCP_FLD)/src/libccp
-LIBS += -L$(LIBCCP) -lccp -lstartccp
-INC += -I$(LIBCCP)
 endif
 
 

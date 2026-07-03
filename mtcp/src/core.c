@@ -27,10 +27,6 @@
 #include "ip_out.h"
 #include "timer.h"
 #include "debug.h"
-#if USE_CCP
-#include "ccp.h"
-#include "libccp/ccp.h"
-#endif
 
 #ifndef DISABLE_DPDK
 /* for launching rte thread */
@@ -68,10 +64,6 @@ static pthread_t g_thread[MAX_CPUS] = {0};
 	(STREAM) || (STATE) || (STAT) || (APP) || (EPOLL)	\
 	|| (DUMP_STREAM)
 static pthread_t log_thread[MAX_CPUS]  = {0};
-#endif
-#if USE_CCP
-static pthread_t ccp_run_thread = 0;
-static pthread_t ccp_recv_thread[MAX_CPUS] = {0};
 #endif
 /*----------------------------------------------------------------------------*/
 static sem_t g_init_sem[MAX_CPUS];
@@ -918,14 +910,6 @@ InitializeMTCPManager(struct mtcp_thread_context* ctx)
 		return NULL;
 	}
 
-#if USE_CCP
-	mtcp->tcp_sid_table = CreateHashtable(HashSID, EqualSID, NUM_BINS_FLOWS);
-	if (!mtcp->tcp_sid_table) {
-		CTRACE_ERROR("Failed to allocate tcp sid lookup table.\n");
-		return NULL;
-	}
-#endif
-
 	mtcp->listeners = CreateHashtable(HashListener, EqualListener, NUM_BINS_LISTENERS);
 	if (!mtcp->listeners) {
 		CTRACE_ERROR("Failed to allocate listener table.\n");
@@ -1083,65 +1067,6 @@ InitializeMTCPManager(struct mtcp_thread_context* ctx)
 	return mtcp;
 }
 /*----------------------------------------------------------------------------*/
-#if USE_CCP
-
-uint32_t libstartccp_run_forever(const char *alg_to_run, uint32_t log_fd);
-
-static void *
-CCPRunThread(void *arg) {
-    // Add ipc argument (always unix, so no need for user to provide manually)
-    char args[1024] = {0};
-    int arglen = strlen(CONFIG.cc)-1;
-    strncpy(args, CONFIG.cc, arglen);
-    strncpy(args+arglen, " --ipc=unix", 11);
-    args[arglen+11] = '\0';
-
-    // Open fd for log file
-	FILE *ccp_log = fopen("cc.log", "w");
-	if (ccp_log == NULL) {
-		perror("fopen cc.log");
-		return 0;
-	}
-    TRACE_CCP("starting ccp thread with args: %s\n", args);
-    TRACE_CCP("printing output to ./cc.log\n");
-    libstartccp_run_forever(args, fileno(ccp_log));
-
-    fclose(ccp_log);
-
-    return 0;
-}
-
-static void *
-CCPRecvLoopThread(void *arg) {
-	mtcp_manager_t mtcp = (mtcp_manager_t)arg;
-	mtcp_thread_context_t ctx = mtcp->ctx;
-
-	int cpu = ctx->cpu;
-	mtcp_core_affinitize(cpu);
-
-	TRACE_CCP("ccp recv loop thread started on cpu %d\n", cpu);
-
-	char recvBuf[CCP_MAX_MSG_SIZE];
-	int bytes_recvd;
-	while (!ctx->done && !ctx->exit) {
-		do {
-			bytes_recvd = recvfrom(mtcp->from_ccp, recvBuf, CCP_MAX_MSG_SIZE, 0, NULL, NULL);
-			if (bytes_recvd <= 0) {
-				if (bytes_recvd < 0) {
-					TRACE_ERROR("recv returned %d\n", bytes_recvd);
-				}
-				break;
-			}
-			if (!mtcp->to_ccp) {
-				setup_ccp_send_socket(mtcp);
-			}
-			ccp_read_msg(recvBuf, bytes_recvd);
-		} while(1);
-	}
-	return 0;
-}
-#endif
-/*----------------------------------------------------------------------------*/
 static void *
 MTCPRunThread(void *arg)
 {
@@ -1207,19 +1132,6 @@ MTCPRunThread(void *arg)
 	g_pctx[cpu] = ctx;
 	mlockall(MCL_CURRENT);
 
-#if USE_CCP
-	setup_ccp_connection(mtcp);
-
-    if (cpu == 0 && pthread_create(&ccp_run_thread, NULL, CCPRunThread, (void *)mtcp) != 0) {
-        TRACE_ERROR("Failed to create thread running CCP on cpu 0");
-    }
-    if (pthread_create(&ccp_recv_thread[cpu], NULL, CCPRecvLoopThread, (void *)mtcp) != 0)
-    {
-        TRACE_ERROR("Failed to create thread for CCP receive loop on cpu %d\n", cpu);
-        return NULL;
-    }
-#endif
-
 	// attach (nic device, queue)
 	working = AttachDevice(ctx);
 	if (working != 0) {
@@ -1241,9 +1153,6 @@ MTCPRunThread(void *arg)
 	mtcp_free_context(&m);
 	/* destroy hash tables */
 	DestroyHashtable(g_mtcp[cpu]->tcp_flow_table);
-#if USE_CCP
-	DestroyHashtable(g_mtcp[cpu]->tcp_sid_table);
-#endif
 	DestroyHashtable(g_mtcp[cpu]->listeners);
 	
 	TRACE_DBG("MTCP thread %d finished.\n", ctx->cpu);
@@ -1413,13 +1322,6 @@ mtcp_free_context(mctx_t mctx)
 #endif
 	fclose(mtcp->log_fp);
 	TRACE_LOG("Log thread %d joined.\n", mctx->cpu);
-
-#if USE_CCP
-	destroy_ccp_connection(mtcp);
-	close(mtcp->from_ccp);
-	close(mtcp->to_ccp);
-	TRACE_CCP("CCP thread %d joined.\n", mctx->cpu);
-#endif
 
 	if (mtcp->connectq) {
 		DestroyStreamQueue(mtcp->connectq);

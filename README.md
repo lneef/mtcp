@@ -22,38 +22,6 @@ We require the following libraries to run mTCP.
 Building the `dpdk-iface-kmod` helper requires kernel headers.
 - For Debian/Ubuntu, try ``apt-get install linux-headers-$(uname -r)``
 
-### CCP support
-
-You can optionally use [CCP](https://ccp-project.github.io/)'s congestion 
-control implementation rather than mTCP's. You'll have wider selection of 
-congestion control algorithms with CCP.
-(Currently this feature is experimental and under revision.)
-
-Using [CCP](https://ccp-project.github.io/) for congestion control (disabled by
-default), requires the CCP library. If you would like to enable CCP, simply run
-configure script with `--enable-ccp` option.
-
-1. Install Rust. Any installation method should be fine. We recommend using
-   rustup:
-
-    ```bash
-    curl https://sh.rustup.rs -sSf | sh -- -y -v --default-toolchain nightly
-    ````
-
-2. Install the CCP command line utility:
-
-    ```bash
-    cargo install portus --bin ccp
-    ```
-
-3. Build the library (comes with Reno and Cubic by default, use `ccp get` to add others):
-
-    ```
-    ccp makelib
-    ```
-
-4. You will also need to link your application against `-lccp` and `-lstartccp` as demonstrated in apps/example/Makefie.in
-
 ## Included directories
 
 mtcp: mtcp source code directory

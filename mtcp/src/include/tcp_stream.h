@@ -6,9 +6,6 @@
 #include <sys/queue.h>
 
 #include "mtcp.h"
-#if RATE_LIMIT_ENABLED || PACING_ENABLED
-#include "pacing.h"
-#endif
 
 struct rtm_stat
 {
@@ -113,9 +110,6 @@ struct tcp_send_vars
 	/* congestion control variables */
 	uint32_t cwnd;				/* congestion window */
 	uint32_t ssthresh;			/* slow start threshold */
-#if USE_CCP
-	uint32_t missing_seq;
-#endif
 
 	/* timestamp */
 	uint32_t ts_lastack_sent;	/* last ack sent time */
@@ -194,22 +188,10 @@ typedef struct tcp_stream
 	
 	uint32_t snd_nxt;		/* send next */
 	uint32_t rcv_nxt;		/* receive next */
-#if USE_CCP
-	uint32_t seq_at_last_loss;	/* the sequence number we left off at before we stopped at wait_for_acks (due to loss) */
-#endif
 
 	struct tcp_recv_vars *rcvvar;
 	struct tcp_send_vars *sndvar;
-#if RATE_LIMIT_ENABLED
-	struct token_bucket  *bucket;
-#endif
-#if PACING_ENABLED
-        struct packet_pacer  *pacer;
-#endif
-#if USE_CCP
-    struct ccp_connection *ccp_conn;
-#endif
-	
+
 	uint32_t last_active_ts;		/* ts_last_ack_sent or ts_last_ts_upd */
 
 } tcp_stream;
@@ -223,18 +205,8 @@ HashFlow(const void *flow);
 int
 EqualFlow(const void *flow1, const void *flow2);
 
-#if USE_CCP 
-/*----------------------------------------------------------------------------*/
-unsigned int
-HashSID(const void *flow);
-
-int
-EqualSID(const void *flow1, const void *flow2);
-/*----------------------------------------------------------------------------*/
-#endif
-
-extern inline int 
-AddEpollEvent(struct mtcp_epoll *ep, 
+extern inline int
+AddEpollEvent(struct mtcp_epoll *ep,
 		int queue_type, socket_map_t socket, uint32_t event);
 
 extern inline void 

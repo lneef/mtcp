@@ -87,15 +87,6 @@ then
 	AC_SUBST(LRO, 1)
 fi
 
-dnl Example of default-disabled feature
-AC_ARG_ENABLE([ccp],
-	AS_HELP_STRING([--enable-ccp], [Enable Congestion Control Plane (CCP)]))
-
-if test "x$enable_ccp" = "xyes"
-then
-	AC_SUBST(CCP, 1)
-fi
-
 dnl Example of default-enabled feature
 AC_ARG_ENABLE([hwcsum],
 	AS_HELP_STRING([--disable-hwcsum], [Disable h/w-based checksum offloading (for relevant NICs)]))
@@ -103,13 +94,6 @@ AC_ARG_ENABLE([hwcsum],
 if test "x$enable_hwcsum" = "xno"
 then
 	AC_SUBST(HWCSUM, 0)
-fi
-
-if test "x$enable_ccp" = "xyes"
-then
-	AC_CHECK_LIB(startccp, libstartccp_run_forever, [echo "Found CCP library"], [
-		AC_MSG_ERROR(CCP library is missing. Please see README.md for instructions.)
-	])
 fi
 
 AM_INIT_AUTOMAKE(mtcp, 3)

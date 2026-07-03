@@ -10,10 +10,6 @@
 #include "debug.h"
 #include "timer.h"
 #include "ip_in.h"
-#include "clock.h"
-#if USE_CCP
-#include "ccp.h"
-#endif
 
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #define MIN(a, b) ((a)<(b)?(a):(b))
@@ -385,38 +381,18 @@ ProcessACK(mtcp_manager_t mtcp, tcp_stream *cur_stream, uint32_t cur_ts,
 			if (cur_stream->rcvvar->snd_wl2 + sndvar->peer_wnd == right_wnd_edge) {
 				if (cur_stream->rcvvar->dup_acks + 1 > cur_stream->rcvvar->dup_acks) {
 					cur_stream->rcvvar->dup_acks++;
-#if USE_CCP
-					ccp_record_event(mtcp, cur_stream, EVENT_DUPACK,
-							 (cur_stream->snd_nxt - ack_seq));
-#endif
 				}
 				dup = TRUE;
 			}
 		}
 	}
 	if (!dup) {
-#if USE_CCP
-		if (cur_stream->rcvvar->dup_acks >= 3) {
-			TRACE_DBG("passed dup_acks, ack=%u, snd_nxt=%u, last_ack=%u len=%u wl2=%u peer_wnd=%u right=%u\n",
-				  ack_seq-sndvar->iss, cur_stream->snd_nxt-sndvar->iss, cur_stream->rcvvar->last_ack_seq-sndvar->iss,
-				  payloadlen, cur_stream->rcvvar->snd_wl2-sndvar->iss, sndvar->peer_wnd / sndvar->mss,
-				  right_wnd_edge - sndvar->iss);
-		}
-#endif
 		cur_stream->rcvvar->dup_acks = 0;
 		cur_stream->rcvvar->last_ack_seq = ack_seq;
 	}
-#if USE_CCP
-	if(cur_stream->wait_for_acks) {
-		TRACE_DBG("got ack, but waiting to send... ack=%u, snd_next=%u cwnd=%u\n",
-			  ack_seq-sndvar->iss, cur_stream->snd_nxt-sndvar->iss,
-			  sndvar->cwnd / sndvar->mss);
-	}
-#endif
 	/* Fast retransmission */
 	if (dup && cur_stream->rcvvar->dup_acks == 3) {
 		TRACE_LOSS("Triple duplicated ACKs!! ack_seq: %u\n", ack_seq);
-		TRACE_CCP("tridup ack %u (%u)!\n", ack_seq - cur_stream->sndvar->iss, ack_seq);
 		if (TCP_SEQ_LT(ack_seq, cur_stream->snd_nxt)) {
 			TRACE_LOSS("Reducing snd_nxt from %u to %u\n",
                                         cur_stream->snd_nxt-sndvar->iss,
@@ -427,19 +403,12 @@ ProcessACK(mtcp_manager_t mtcp, tcp_stream *cur_stream, uint32_t cur_ts,
 			sndvar->rstat.tdp_ack_bytes += (cur_stream->snd_nxt - ack_seq);
 #endif
 
-#if USE_CCP
-			ccp_record_event(mtcp, cur_stream, EVENT_TRI_DUPACK, ack_seq);
-#endif
 			if (ack_seq != sndvar->snd_una) {
 				TRACE_DBG("ack_seq and snd_una mismatch on tdp ack. "
-						"ack_seq: %u, snd_una: %u\n", 
+						"ack_seq: %u, snd_una: %u\n",
 						ack_seq, sndvar->snd_una);
 			}
-#if USE_CCP
-			sndvar->missing_seq = ack_seq;
-#else
 			cur_stream->snd_nxt = ack_seq;
-#endif
 		}
 
 		/* update congestion control variables */
@@ -478,17 +447,8 @@ ProcessACK(mtcp_manager_t mtcp, tcp_stream *cur_stream, uint32_t cur_ts,
 #endif /* TCP_OPT_SACK_ENABLED */
 
 #if RECOVERY_AFTER_LOSS
-#if USE_CCP
 	/* updating snd_nxt (when recovered from loss) */
-	if (TCP_SEQ_GT(ack_seq, cur_stream->snd_nxt) ||
-	    (cur_stream->wait_for_acks && TCP_SEQ_GT(ack_seq, cur_stream->seq_at_last_loss)
-#if TCP_OPT_SACK_ENABLED 
-		&& cur_stream->rcvvar->sacked_pkts == 0
-#endif
-	))
-#else
-        if (TCP_SEQ_GT(ack_seq, cur_stream->snd_nxt))
-#endif /* USE_CCP */
+	if (TCP_SEQ_GT(ack_seq, cur_stream->snd_nxt))
 	{
 #if RTM_STAT
 		sndvar->rstat.ack_upd_cnt++;
@@ -498,9 +458,6 @@ ProcessACK(mtcp_manager_t mtcp, tcp_stream *cur_stream, uint32_t cur_ts,
 		cur_stream->sndvar->cwnd = cur_stream->sndvar->ssthresh;
 
 		TRACE_LOSS("Updating snd_nxt from %u to %u\n", cur_stream->snd_nxt, ack_seq);
-#if USE_CCP
-		cur_stream->wait_for_acks = FALSE;
-#endif
 		cur_stream->snd_nxt = ack_seq;
 		TRACE_DBG("Sending again..., ack_seq=%u sndlen=%u cwnd=%u\n",
                         ack_seq-sndvar->iss,
@@ -519,12 +476,6 @@ ProcessACK(mtcp_manager_t mtcp, tcp_stream *cur_stream, uint32_t cur_ts,
 	if (packets * sndvar->eff_mss > rmlen) {
 		packets++;
 	}
-
-#if USE_CCP
-	ccp_cong_control(mtcp, cur_stream, ack_seq, rmlen, packets);
-#else
-	// log_cwnd_rtt(cur_stream);
-#endif
 
 	/* If ack_seq is previously acked, return */
 	if (TCP_SEQ_GEQ(sndvar->sndbuf->head_seq, ack_seq)) {
@@ -546,7 +497,6 @@ ProcessACK(mtcp_manager_t mtcp, tcp_stream *cur_stream, uint32_t cur_ts,
 			TRACE_RTT("NOT IMPLEMENTED.\n");
 		}
 
-		// TODO CCP should comment this out? 
 		/* Update congestion control variables */
 		if (cur_stream->state >= TCP_ST_ESTABLISHED) {
 			if (sndvar->cwnd < sndvar->ssthresh) {

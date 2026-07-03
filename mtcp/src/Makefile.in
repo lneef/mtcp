@@ -1,12 +1,11 @@
 # TODO: Make this Makefile.in pretty
 
-.PHONY: clean libccp
+.PHONY: clean
 
 ### TARGET ###
 DPDK=@DPDK@
 ENFORCE_RX_IDLE=@ENFORCE_RX_IDLE@
 LRO=@LRO@
-CCP=@CCP@
 HWCSUM=@HWCSUM@
 MTCP_LIB_DIR=../lib
 MTCP_LIB=libmtcp.a
@@ -53,10 +52,6 @@ ifeq ($(LRO),1)
 GCC_OPT += -DENABLELRO
 endif
 
-ifeq ($(CCP),1)
-GCC_OPT += -DUSE_CCP
-endif
-
 ifeq ($(HWCSUM),0)
 GCC_OPT += -DDISABLE_HWCSUM
 endif
@@ -72,22 +67,12 @@ ifeq ($(ENFORCE_RX_IDLE), 1)
 INC += -DENFORCE_RX_IDLE -DRX_IDLE_THRESH=@RX_IDLE_THRESH@
 endif
 
-ifeq ($(CCP), 1)
-LIBCCP_PATH=./libccp
-CCP_LIBS = -L$(LIBCCP_PATH) -lccp
-CCP_INC = -I$(LIBCCP_PATH)
-endif
-
 ### SOURCE CODE ###
 SRCS = core.c tcp_stream.c config.c api.c eventpoll.c socket.c pipe.c \
 	   tcp_util.c eth_in.c ip_in.c tcp_in.c eth_out.c ip_out.c tcp_out.c \
 	   arp.c timer.c cpu.c rss.c addr_pool.c fhash.c memory_mgt.c logger.c debug.c \
 	   tcp_rb_frag_queue.c tcp_ring_buffer.c tcp_send_buffer.c tcp_sb_queue.c tcp_stream_queue.c \
 	   io_module.c dpdk_module.c icmp.c
-
-ifeq ($(CCP), 1)
-SRCS += ccp.c clock.c pacing.c
-endif
 
 OBJS = $(patsubst %.c,%.o,$(SRCS))
 DEPS = $(patsubst %.c,.%.d,$(SRCS))
@@ -101,20 +86,11 @@ else
 endif
 
 ### GOALS ###
-ifeq ($(CCP), 1)
-all: default libccp
-else
 all: default
-endif
 
 default: $(OBJS) $(MTCP_HDR)
 	mkdir -p $(MTCP_LIB_DIR)
 	ar rvs $(MTCP_LIB_DIR)/$(MTCP_LIB) $(OBJS)
-
-ifeq ($(CCP), 1)
-libccp:
-	$(MAKE) -C ./libccp
-endif
 
 $(OBJS): %.o: %.c Makefile
 	$(MSG) "   CC $<"

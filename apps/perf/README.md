@@ -24,16 +24,6 @@ seconds)
 - `./client wait [ip] [port] [length (seconds)]`
 - `python recv.py send [ip] [port]`
 
-*NOTE*: If using CCP with mTCP, you will need to ensure that `LD_LIBRARY_PATH`
-includes the path to libccp:
-
-`export LD_LIBRARY_PATH=/path/to/mtcp/src/libccp:$LD_LIBRARY_PATH`
-
-Even once this is in your user's local environment, you will probably need to
-make sure it persists when running with sudo:
-
-`sudo env LD_LIBRARY_PATH=$LD_LIBRARY_PATH ./client ...`
-
 
 Setup Notes
 ===========
