@@ -69,22 +69,19 @@ mTCP builds against a system DPDK installation discovered via `pkg-config`.
 4. Build the mtcp library and example applications:
 
     ```bash
-    autoreconf -ivf   # regenerate ./configure (once, or after editing configure.ac)
-    ./configure       # locate DPDK via pkg-config
-    make              # build libmtcp.a + apps/example (epserver, epwget)
+    make              # builds libmtcp.a + apps/example (epserver, epwget)
     ```
 
-    - By default, mTCP assumes that there are 16 CPUs in your system.
-      You can set the CPU limit, e.g. on a 32-core system, with:
+    Build options live in `config.mk` (edit it, or override on the command
+    line). For example, on a 32-core system:
 
-        ```bash
-        ./configure CFLAGS="-DMAX_CPUS=32"
-        ```
-    Your NIC should support RSS queues equal to the MAX_CPUS value
-    (mTCP expects a one-to-one RSS queue to CPU binding).
+    ```bash
+    make MAX_CPUS=32
+    ```
+    Your NIC should support RSS queues equal to `MAX_CPUS` (mTCP expects a
+    one-to-one RSS queue to CPU binding). Checksum offload is on by default;
+    set `HWCSUM=0` in `config.mk` to disable it.
 
-    - checksum offloading in the NIC is ENABLED by default; pass
-      ``--disable-hwcsum`` to `./configure` to turn it off.
     - check `libmtcp.a` in `mtcp/lib`
     - check header files in `mtcp/include`
     - check example binary files in `apps/example`

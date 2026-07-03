@@ -1,14 +1,11 @@
-# mtcp-specific files
-Makefile
-autom4te.cache/
-config.h
-config.log
-config.status
-dpdk-iface-kmod/dpdk_iface_main
-mtcp/Makefile
+# build outputs
 mtcp/lib/
-util/Makefile
-stamp-h1
+dpdk-iface-kmod/dpdk_iface_main
+
+# executable binaries built in place
+apps/example/epserver
+apps/example/epwget
+apps/perf/client
 
 # editors' temporary files
 .vscode/

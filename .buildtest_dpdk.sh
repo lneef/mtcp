@@ -8,6 +8,4 @@ pkg-config --exists libdpdk || {
 	exit 1
 }
 
-autoreconf -ivf
-./configure
 make
