@@ -69,8 +69,7 @@ dpdk-iface-kmod - helper LKM exporting DPDK net_device stats to the OS
 
 apps - mTCP applications
 apps/example - example applications (see README)
-apps/lighttpd-1.4.32 - mTCP-ported lighttpd (see INSTALL)
-apps/apache_benchmark - mTCP-ported apache benchmark (ab) (see README-mtcp)
+apps/perf - mTCP performance client
 
 util - useful source code for applications
 
